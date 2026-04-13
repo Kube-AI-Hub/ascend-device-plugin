@@ -34,10 +34,11 @@ import (
 )
 
 var (
-	hwLoglevel            = flag.Int("hw_loglevel", 0, "huawei log level, -1-debug, 0-info, 1-warning, 2-error 3-critical default value: 0")
-	configFile            = flag.String("config_file", "", "config file path")
-	nodeName              = flag.String("node_name", os.Getenv("NODE_NAME"), "node name")
-	checkIdleVNPUInterval = flag.Int("check_idle_vnpu_interval", 60, "the interval (in seconds) to check idle vNPU and release them")
+	hwLoglevel             = flag.Int("hw_loglevel", 0, "huawei log level, -1-debug, 0-info, 1-warning, 2-error 3-critical default value: 0")
+	configFile             = flag.String("config_file", "", "config file path")
+	nodeName               = flag.String("node_name", os.Getenv("NODE_NAME"), "node name")
+	checkIdleVNPUInterval  = flag.Int("check_idle_vnpu_interval", 60, "interval (seconds) to check idle vNPU and release them, range [3,1800]")
+	hamiRegisterIntervalSec = flag.Int("hami_register_interval", 30, "interval (seconds) between successful HAMi node registration updates, range [3,1800]")
 )
 
 func checkFlags() {
@@ -47,6 +48,12 @@ func checkFlags() {
 	}
 	if *nodeName == "" {
 		klog.Fatalf("node name not set, use --node_name or env NODE_NAME to set node name")
+	}
+	if *checkIdleVNPUInterval < 3 || *checkIdleVNPUInterval > 1800 {
+		klog.Fatalf("check_idle_vnpu_interval must be in [3,1800], got %d", *checkIdleVNPUInterval)
+	}
+	if *hamiRegisterIntervalSec < 3 || *hamiRegisterIntervalSec > 1800 {
+		klog.Fatalf("hami_register_interval must be in [3,1800], got %d", *hamiRegisterIntervalSec)
 	}
 }
 
@@ -136,7 +143,7 @@ func main() {
 	if err != nil {
 		klog.Fatalf("load config failed, error is %v", err)
 	}
-	server, err := server.NewPluginServer(mgr, *nodeName, *checkIdleVNPUInterval)
+	server, err := server.NewPluginServer(mgr, *nodeName, *checkIdleVNPUInterval, *hamiRegisterIntervalSec)
 	if err != nil {
 		klog.Fatalf("init PluginServer failed, error is %v", err)
 	}

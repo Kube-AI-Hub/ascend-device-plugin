@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Project-HAMi/HAMi/pkg/device"
@@ -33,6 +34,7 @@ import (
 	"github.com/Project-HAMi/ascend-device-plugin/internal/manager"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/klog/v2"
@@ -45,42 +47,59 @@ const (
 	NodeLockAscend  = "hami.io/mutex.lock"
 	Ascend910Prefix = "Ascend910"
 	Ascend910CType  = "Ascend910C"
+
+	// gRPC server tuning (aligned with mind-cluster ascend-device-plugin/pkg/common)
+	maxGRPCRecvMsgSize         = 4 * 1024 * 1024
+	maxGRPCConcurrentStreams   = 64
+	devicePluginSocketFileMode = 0600
 )
+
+var grpcKeepAlive = keepalive.ServerParameters{
+	Time:    5 * time.Minute,
+	Timeout: 5 * time.Minute,
+}
 
 var (
 	reportTimeOffset = flag.Int64("report_time_offset", 1, "report time offset")
 )
 
 type PluginServer struct {
-	nodeName              string
-	registerAnno          string
-	handshakeAnno         string
-	allocAnno             string
-	grpcServer            *grpc.Server
-	mgr                   *manager.AscendManager
-	socket                string
-	stopCh                chan interface{}
-	healthCh              chan int32
-	checkIdleVNPUInterval int
+	nodeName               string
+	registerAnno           string
+	handshakeAnno          string
+	allocAnno              string
+	grpcServer             *grpc.Server
+	mgr                    *manager.AscendManager
+	socket                 string
+	stopCh                 chan interface{}
+	stopMu                 sync.Mutex
+	stopped                bool
+	healthCh               chan int32
+	checkIdleVNPUInterval  int
+	hamiRegisterIntervalSec int
 }
 
-func NewPluginServer(mgr *manager.AscendManager, nodeName string, checkIdleVNPUInterval int) (*PluginServer, error) {
+func NewPluginServer(mgr *manager.AscendManager, nodeName string, checkIdleVNPUInterval, hamiRegisterIntervalSec int) (*PluginServer, error) {
 	return &PluginServer{
-		nodeName:              nodeName,
-		registerAnno:          fmt.Sprintf("hami.io/node-register-%s", mgr.CommonWord()),
-		handshakeAnno:         fmt.Sprintf("hami.io/node-handshake-%s", mgr.CommonWord()),
-		allocAnno:             fmt.Sprintf("huawei.com/%s", mgr.CommonWord()),
-		grpcServer:            grpc.NewServer(),
-		mgr:                   mgr,
-		socket:                path.Join(v1beta1.DevicePluginPath, fmt.Sprintf("%s.sock", mgr.CommonWord())),
-		stopCh:                make(chan interface{}),
-		healthCh:              make(chan int32),
-		checkIdleVNPUInterval: checkIdleVNPUInterval,
+		nodeName:                nodeName,
+		registerAnno:            fmt.Sprintf("hami.io/node-register-%s", mgr.CommonWord()),
+		handshakeAnno:           fmt.Sprintf("hami.io/node-handshake-%s", mgr.CommonWord()),
+		allocAnno:               fmt.Sprintf("huawei.com/%s", mgr.CommonWord()),
+		grpcServer:              nil,
+		mgr:                     mgr,
+		socket:                  path.Join(v1beta1.DevicePluginPath, fmt.Sprintf("%s.sock", mgr.CommonWord())),
+		stopCh:                  nil,
+		healthCh:                make(chan int32, 1),
+		checkIdleVNPUInterval:   checkIdleVNPUInterval,
+		hamiRegisterIntervalSec: hamiRegisterIntervalSec,
 	}, nil
 }
 
 func (ps *PluginServer) Start() error {
+	ps.stopMu.Lock()
 	ps.stopCh = make(chan interface{})
+	ps.stopped = false
+	ps.stopMu.Unlock()
 	err := ps.mgr.UpdateDevice()
 	if err != nil {
 		return err
@@ -116,8 +135,19 @@ func (ps *PluginServer) startPeriodicCheckIdleVNPUs() {
 }
 
 func (ps *PluginServer) Stop() error {
-	close(ps.stopCh)
-	ps.grpcServer.Stop()
+	ps.stopMu.Lock()
+	defer ps.stopMu.Unlock()
+	if ps.stopped {
+		return nil
+	}
+	ps.stopped = true
+	if ps.stopCh != nil {
+		close(ps.stopCh)
+	}
+	if ps.grpcServer != nil {
+		ps.grpcServer.Stop()
+		ps.grpcServer = nil
+	}
 	return nil
 }
 
@@ -153,35 +183,21 @@ func (ps *PluginServer) serve() error {
 	if err != nil {
 		return err
 	}
+	if err := os.Chmod(ps.socket, devicePluginSocketFileMode); err != nil {
+		_ = sock.Close()
+		return fmt.Errorf("chmod device plugin socket: %w", err)
+	}
+	ps.grpcServer = grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxGRPCRecvMsgSize),
+		grpc.MaxConcurrentStreams(maxGRPCConcurrentStreams),
+		grpc.KeepaliveParams(grpcKeepAlive),
+	)
 	v1beta1.RegisterDevicePluginServer(ps.grpcServer, ps)
 	resourceName := ps.mgr.ResourceName()
 	go func() {
-		lastCrashTime := time.Now()
-		restartCount := 0
-		for {
-			klog.Infof("Starting GRPC server for '%s'", resourceName)
-			err := ps.grpcServer.Serve(sock)
-			if err == nil {
-				break
-			}
-
-			klog.Infof("GRPC server for '%s' crashed with error: %v", resourceName, err)
-
-			// restart if it has not been too often
-			// i.e. if server has crashed more than 5 times and it didn't last more than one hour each time
-			if restartCount > 5 {
-				// quit
-				klog.Fatalf("GRPC server for '%s' has repeatedly crashed recently. Quitting", resourceName)
-			}
-			timeSinceLastCrash := time.Since(lastCrashTime).Seconds()
-			lastCrashTime = time.Now()
-			if timeSinceLastCrash > 3600 {
-				// it has been one hour since the last crash.. reset the count
-				// to reflect on the frequency
-				restartCount = 1
-			} else {
-				restartCount++
-			}
+		klog.Infof("Starting GRPC server for '%s'", resourceName)
+		if err := ps.grpcServer.Serve(sock); err != nil {
+			klog.Errorf("GRPC server for '%s' exited: %v", resourceName, err)
 		}
 	}()
 
@@ -275,6 +291,10 @@ func (ps *PluginServer) registerHAMi() error {
 }
 
 func (ps *PluginServer) watchAndRegister() {
+	okInterval := time.Duration(ps.hamiRegisterIntervalSec) * time.Second
+	if okInterval < 3*time.Second {
+		okInterval = 3 * time.Second
+	}
 	timer := time.After(1 * time.Second)
 	for {
 		select {
@@ -290,7 +310,10 @@ func (ps *PluginServer) watchAndRegister() {
 				timer = time.After(5 * time.Second)
 				continue
 			}
-			ps.healthCh <- unhealthy[0]
+			select {
+			case ps.healthCh <- unhealthy[0]:
+			default:
+			}
 		}
 		err := ps.registerHAMi()
 		if err != nil {
@@ -298,7 +321,7 @@ func (ps *PluginServer) watchAndRegister() {
 			timer = time.After(5 * time.Second)
 		} else {
 			klog.V(3).Infof("register HAMi success")
-			timer = time.After(30 * time.Second)
+			timer = time.After(okInterval)
 		}
 	}
 }
@@ -306,7 +329,7 @@ func (ps *PluginServer) watchAndRegister() {
 func (ps *PluginServer) parsePodAnnotation(pod *v1.Pod) ([]int32, []string, error) {
 	anno, ok := pod.Annotations[ps.allocAnno]
 	if !ok {
-		return nil, nil, fmt.Errorf("annotation %s not set", "huawei.com/Ascend")
+		return nil, nil, fmt.Errorf("annotation %s not set", ps.allocAnno)
 	}
 	var rtInfo []ascend.RuntimeInfo
 	err := json.Unmarshal([]byte(anno), &rtInfo)
@@ -373,8 +396,29 @@ func (ps *PluginServer) GetPreferredAllocation(context.Context, *v1beta1.Preferr
 	return nil, fmt.Errorf("not supported")
 }
 
+func checkAllocateRequest(requests *v1beta1.AllocateRequest) error {
+	if requests == nil {
+		return fmt.Errorf("allocate request is nil")
+	}
+	if len(requests.ContainerRequests) == 0 {
+		return fmt.Errorf("empty container requests")
+	}
+	for i, r := range requests.ContainerRequests {
+		if r == nil {
+			return fmt.Errorf("nil container allocate request at index %d", i)
+		}
+		if len(r.DevicesIDs) == 0 {
+			return fmt.Errorf("empty device IDs in container request at index %d", i)
+		}
+	}
+	return nil
+}
+
 func (ps *PluginServer) Allocate(ctx context.Context, reqs *v1beta1.AllocateRequest) (*v1beta1.AllocateResponse, error) {
 	klog.V(5).Infof("Allocate: %v", reqs)
+	if err := checkAllocateRequest(reqs); err != nil {
+		return nil, err
+	}
 	success := false
 	var pod *v1.Pod
 	defer func() {
@@ -388,7 +432,6 @@ func (ps *PluginServer) Allocate(ctx context.Context, reqs *v1beta1.AllocateRequ
 		klog.Errorf("get pending pod error: %v", err)
 		return nil, fmt.Errorf("get pending pod error: %v", err)
 	}
-	resp := v1beta1.ContainerAllocateResponse{}
 	IDs, temps, err := ps.parsePodAnnotation(pod)
 	if err != nil {
 		return nil, fmt.Errorf("parse pod annotation error: %v", err)
@@ -407,14 +450,21 @@ func (ps *PluginServer) Allocate(ctx context.Context, reqs *v1beta1.AllocateRequ
 			break
 		}
 	}
-	resp.Envs = make(map[string]string)
-	resp.Envs["ASCEND_VISIBLE_DEVICES"] = ascendVisibleDevices
-	if ascendVNPUSpec != "" {
-		resp.Envs["ASCEND_VNPU_SPECS"] = ascendVNPUSpec
+	resps := &v1beta1.AllocateResponse{}
+	for range reqs.ContainerRequests {
+		resp := v1beta1.ContainerAllocateResponse{
+			Envs: map[string]string{
+				"ASCEND_VISIBLE_DEVICES": ascendVisibleDevices,
+			},
+		}
+		if ascendVNPUSpec != "" {
+			resp.Envs["ASCEND_VNPU_SPECS"] = ascendVNPUSpec
+		}
+		resps.ContainerResponses = append(resps.ContainerResponses, &resp)
 	}
-	klog.V(5).Infof("allocate response: %v", resp)
+	klog.V(5).Infof("allocate response: %v", resps)
 	success = true
-	return &v1beta1.AllocateResponse{ContainerResponses: []*v1beta1.ContainerAllocateResponse{&resp}}, nil
+	return resps, nil
 }
 
 func (ps *PluginServer) PreStartContainer(context.Context, *v1beta1.PreStartContainerRequest) (*v1beta1.PreStartContainerResponse, error) {

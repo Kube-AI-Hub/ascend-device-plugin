@@ -16,17 +16,46 @@ Memory slicing is supported based on virtualization template, lease available te
 git submodule add https://gitcode.com/Ascend/mind-cluster.git
 ```
 
+If `mind-cluster` is not at `./mind-cluster` (for example it sits next to this repo as `../mind-cluster`), either run `git submodule update --init` so `./mind-cluster` exists, or create a symlink before `make` / `docker build`:
+
+```bash
+ln -snf ../mind-cluster mind-cluster
+```
+
 ## Compile
 
 ```bash
 make all
 ```
 
+Flags include `--check_idle_vnpu_interval` (seconds, default 60, range 3–1800) and `--hami_register_interval` (seconds, default 30, range 3–1800) for periodic HAMi node registration updates.
+
 ### Build
 
+Single-arch local image:
+
 ```bash
-docker buildx build -t $IMAGE_NAME .
+docker build -t $IMAGE_NAME .
 ```
+
+Multi-arch registry image (same pattern as HAMi `build.sh`; requires `docker buildx` and `docker login` to the registry when pushing):
+
+```bash
+./build.sh
+```
+
+Override registry, image name, platforms, or skip push (load locally):
+
+```bash
+REGISTRY=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub \
+  IMG_NAME=ascend-device-plugin \
+  PLATFORMS=linux/amd64,linux/arm64 \
+  ./build.sh
+
+PLATFORMS=linux/amd64 DOCKER_PUSH=0 ./build.sh
+```
+
+Image tag is read from `image-version.txt` (or set `VERSION=...`).
 
 ## Deployment
 

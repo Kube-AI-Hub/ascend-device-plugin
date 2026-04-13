@@ -192,8 +192,11 @@ func (am *AscendManager) CleanupIdleVNPUs() error {
 	}
 	klog.Infof("Found %d devices to check for idle vNPUs,%+v", len(IDs), IDs)
 
+	sortedIDs := append([]int32(nil), IDs...)
+	sort.Slice(sortedIDs, func(i, j int) bool { return sortedIDs[i] < sortedIDs[j] })
+
 	totalCleaned := 0
-	for _, logicID := range IDs {
+	for _, logicID := range sortedIDs {
 		cardID, deviceID, err := am.mgr.GetCardIDDeviceID(logicID)
 		if err != nil {
 			klog.Warningf("failed to get card/device ID for logic ID %d: %v", logicID, err)
@@ -203,6 +206,9 @@ func (am *AscendManager) CleanupIdleVNPUs() error {
 		vDevInfos, err := am.mgr.GetVirtualDeviceInfo(logicID)
 		if err != nil {
 			klog.Infof("no vNPU found on device %d or query failed: %v", logicID, err)
+			continue
+		}
+		if len(vDevInfos.VDevInfo) == 0 {
 			continue
 		}
 
