@@ -17,7 +17,7 @@ if [ -n "${VERSION:-}" ]; then
 elif [ -f "${ROOT_DIR}/image-version.txt" ]; then
     VERSION="$(tr -d ' \t\n' < "${ROOT_DIR}/image-version.txt")"
 else
-    VERSION="v1.3.0"
+    VERSION="v1.2.1"
 fi
 
 IMG_TAG="${REGISTRY}/${IMG_NAME}:${VERSION}"
@@ -65,7 +65,8 @@ make docker-buildx \
     TARGET_ARCH="${TARGET_ARCH}" \
     PLATFORMS="${PLATFORMS}" \
     DOCKER_BUILDX_OUTPUT="${DOCKER_BUILDX_OUTPUT}" \
-    BASE_IMAGE="${BASE_IMAGE:-ubuntu:22.04}" \
+    GOLANG_IMAGE="${GOLANG_IMAGE:-watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/golang:1.25.5-bookworm}" \
+    BASE_IMAGE="${BASE_IMAGE:-watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ubuntu:22.04}" \
     GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 
 if [[ "${DOCKER_BUILDX_OUTPUT}" == "--push" ]]; then

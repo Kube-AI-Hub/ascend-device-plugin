@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"ascend-common/devmanager"
+	"ascend-common/devmanager/common"
 	"ascend-common/devmanager/dcmi"
 
 	"github.com/Project-HAMi/ascend-device-plugin/internal"
@@ -68,15 +69,36 @@ func (am *AscendManager) LoadConfig(path string) error {
 	if chipInfo.Type != "Ascend" {
 		return fmt.Errorf("chip type is not Ascend")
 	}
+	devType := common.GetDeviceTypeByChipName(chipInfo.Name)
+	klog.Infof("detected chip name=%s, classified devType=%s", chipInfo.Name, devType)
+
 	idx := -1
 	for i, vnpu := range config.VNPUs {
-		if vnpu.ChipName == chipInfo.Name {
-			idx = i
-			break
+		if vnpu.DevType != "" && vnpu.DevType == devType {
+			if vnpu.ChipName == "" || vnpu.ChipName == chipInfo.Name {
+				idx = i
+				break
+			}
 		}
 	}
 	if idx == -1 {
-		return fmt.Errorf("can not find vnpu config for chip %s", chipInfo.Name)
+		for i, vnpu := range config.VNPUs {
+			if vnpu.DevType != "" && vnpu.DevType == devType {
+				idx = i
+				break
+			}
+		}
+	}
+	if idx == -1 {
+		for i, vnpu := range config.VNPUs {
+			if vnpu.ChipName == chipInfo.Name {
+				idx = i
+				break
+			}
+		}
+	}
+	if idx == -1 {
+		return fmt.Errorf("can not find vnpu config for chip %s (devType=%s)", chipInfo.Name, devType)
 	}
 	am.config = config.VNPUs[idx]
 	sort.Slice(am.config.Templates, func(i, j int) bool {

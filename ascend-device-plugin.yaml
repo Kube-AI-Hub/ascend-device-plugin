@@ -54,7 +54,7 @@ spec:
       serviceAccountName: hami-ascend
       terminationGracePeriodSeconds: 30
       containers:
-        - image: watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ascend-device-plugin:v1.3.0
+        - image: watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ascend-device-plugin:v1.2.1
           imagePullPolicy: IfNotPresent
           name: device-plugin
           resources:

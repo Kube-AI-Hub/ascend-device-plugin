@@ -1,6 +1,8 @@
 # Build requires mind-cluster submodule at ./mind-cluster (see .gitmodules).
-ARG BASE_IMAGE=ubuntu:22.04
-FROM golang:1.22-bookworm AS build
+# ARGs before the first FROM are only for use in FROM lines (Dockerfile spec).
+ARG GOLANG_IMAGE=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/golang:1.25.5-bookworm
+ARG BASE_IMAGE=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ubuntu:22.04
+FROM ${GOLANG_IMAGE} AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libc6-dev ca-certificates \
@@ -16,7 +18,7 @@ ENV GOPROXY=${GOPROXY}
 RUN go mod download
 RUN go build -trimpath -ldflags "-s -w -X github.com/Project-HAMi/ascend-device-plugin/version.version=${VERSION}" -o /out/ascend-device-plugin ./cmd/main.go
 
-FROM $BASE_IMAGE
+FROM ${BASE_IMAGE}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64/common
 

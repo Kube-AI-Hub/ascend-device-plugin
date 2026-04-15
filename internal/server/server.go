@@ -462,7 +462,7 @@ func (ps *PluginServer) Allocate(ctx context.Context, reqs *v1beta1.AllocateRequ
 		}
 		resps.ContainerResponses = append(resps.ContainerResponses, &resp)
 	}
-	klog.V(5).Infof("allocate response: %v", resps)
+	klog.Infof("Allocate: ASCEND_VISIBLE_DEVICES=%s, ASCEND_VNPU_SPECS=%s", ascendVisibleDevices, ascendVNPUSpec)
 	success = true
 	return resps, nil
 }

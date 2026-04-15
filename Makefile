@@ -4,7 +4,8 @@ BUILDARGS ?= -ldflags '-s -w -X github.com/Project-HAMi/ascend-device-plugin/ver
 IMG_NAME = projecthami/ascend-device-plugin
 REGISTRY ?= watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub
 IMG_TAG ?= $(REGISTRY)/$(IMG_NAME):$(VERSION)
-BASE_IMAGE ?= ubuntu:22.04
+BASE_IMAGE ?= watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ubuntu:22.04
+GOLANG_IMAGE ?= watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/golang:1.25.5-bookworm
 GOPROXY ?= https://goproxy.cn,direct
 PLATFORMS ?= linux/amd64,linux/arm64
 DOCKER_BUILDX_OUTPUT ?= --push
@@ -16,6 +17,7 @@ tidy:
 
 docker:
 	docker build \
+	--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 	--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 	--build-arg GOPROXY=$(GOPROXY) \
 	--build-arg VERSION=$(VERSION) \
@@ -24,6 +26,7 @@ docker:
 docker-buildx:
 	docker buildx build \
 	--platform $(PLATFORMS) \
+	--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 	--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 	--build-arg GOPROXY=$(GOPROXY) \
 	--build-arg VERSION=$(VERSION) \
