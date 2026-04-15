@@ -460,11 +460,38 @@ func (ps *PluginServer) Allocate(ctx context.Context, reqs *v1beta1.AllocateRequ
 		if ascendVNPUSpec != "" {
 			resp.Envs["ASCEND_VNPU_SPECS"] = ascendVNPUSpec
 		}
+		mountNpuSmi(&resp)
 		resps.ContainerResponses = append(resps.ContainerResponses, &resp)
 	}
 	klog.Infof("Allocate: ASCEND_VISIBLE_DEVICES=%s, ASCEND_VNPU_SPECS=%s", ascendVisibleDevices, ascendVNPUSpec)
 	success = true
 	return resps, nil
+}
+
+// npuSmiCandidate maps a path visible inside the device-plugin container
+// (checkPath) to the actual host path for the kubelet Mount response.
+type npuSmiCandidate struct {
+	checkPath string // path inside device-plugin container for os.Stat
+	hostPath  string // real host path for kubelet
+}
+
+var npuSmiCandidates = []npuSmiCandidate{
+	{"/usr/local/Ascend/driver/tools/npu-smi", "/usr/local/Ascend/driver/tools/npu-smi"},
+	{"/host/usr/local/sbin/npu-smi", "/usr/local/sbin/npu-smi"},
+}
+
+func mountNpuSmi(resp *v1beta1.ContainerAllocateResponse) {
+	for _, c := range npuSmiCandidates {
+		if _, err := os.Stat(c.checkPath); err != nil {
+			continue
+		}
+		resp.Mounts = append(resp.Mounts, &v1beta1.Mount{
+			HostPath:      c.hostPath,
+			ContainerPath: "/usr/local/bin/npu-smi",
+			ReadOnly:      true,
+		})
+		return
+	}
 }
 
 func (ps *PluginServer) PreStartContainer(context.Context, *v1beta1.PreStartContainerRequest) (*v1beta1.PreStartContainerResponse, error) {
