@@ -1,0 +1,29 @@
+# VCS / IDE / OS metadata
+.git
+.github
+.gitignore
+.gitmodules
+.idea
+.vscode
+.DS_Store
+
+# Local build artifact (rebuilt locally, would invalidate COPY . .)
+ascend-device-plugin
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage/
+coverage.txt
+
+# Examples / yaml manifests / docs - not used by the binary build
+examples/
+*.yaml
+README*.md
+OWNERS
+
+# NOTE: do NOT exclude mind-cluster/ - it is a git submodule the build depends on

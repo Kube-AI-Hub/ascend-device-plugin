@@ -10,6 +10,13 @@ GOPROXY ?= https://goproxy.cn,direct
 PLATFORMS ?= linux/amd64,linux/arm64
 DOCKER_BUILDX_OUTPUT ?= --push
 
+# Local-directory buildx cache. No network roundtrip, survives builder
+# recreation / BuildKit GC, and is shared across all docker-container builders.
+# Override BUILD_CACHE_DIR to relocate, or set BUILD_CACHE= to disable.
+# Periodically clean with: make container-cache-prune
+BUILD_CACHE_DIR ?= $(HOME)/.cache/buildx/ascend-device-plugin
+BUILD_CACHE ?= --cache-to type=local,dest=$(BUILD_CACHE_DIR),mode=max,compression=zstd,compression-level=3 --cache-from type=local,src=$(BUILD_CACHE_DIR)
+
 all: ascend-device-plugin
 
 tidy:
@@ -24,8 +31,10 @@ docker:
 	-t $(IMG_NAME):$(VERSION) .
 
 docker-buildx:
+	@mkdir -p $(BUILD_CACHE_DIR)
 	docker buildx build \
 	--platform $(PLATFORMS) \
+	$(BUILD_CACHE) \
 	--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 	--build-arg BASE_IMAGE=$(BASE_IMAGE) \
 	--build-arg GOPROXY=$(GOPROXY) \
@@ -34,6 +43,10 @@ docker-buildx:
 	-t $(IMG_TAG) \
 	$(DOCKER_BUILDX_OUTPUT) \
 	.
+
+container-cache-prune:
+	@echo "Removing local buildx cache at $(BUILD_CACHE_DIR)..."
+	rm -rf $(BUILD_CACHE_DIR)
 
 lint:
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
@@ -45,4 +58,4 @@ ascend-device-plugin:
 clean:
 	rm -rf ./ascend-device-plugin
 
-.PHONY: all clean docker docker-buildx
+.PHONY: all clean docker docker-buildx container-cache-prune
