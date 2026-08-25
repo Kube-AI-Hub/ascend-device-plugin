@@ -52,6 +52,10 @@ type Manager interface {
 	GetUnHealthIDs() []int32
 	CleanupIdleVNPUs() error
 	IsHamiVnpuCore() bool
+	// StaleRegisterCommonWords are other commonWords that share this node's
+	// chipName. Their node-register/handshake annotations must be cleared so
+	// HAMi does not see two SKUs on one node after a 24G/48G switch.
+	StaleRegisterCommonWords() []string
 }
 
 type AscendManager struct {
@@ -128,10 +132,11 @@ func (am *AscendManager) LoadConfig(path string) error {
 		return fmt.Errorf("chip type is not Ascend")
 	}
 	devType := common.GetDeviceTypeByChipName(chipInfo.Name)
-	klog.Infof("detected chip name=%s, classified devType=%s", chipInfo.Name, devType)
-	idx := indexVNPUConfig(config.VNPUs.Configs, chipInfo.Name, devType)
+	memoryMB := probeDeviceMemoryMB(am.mgr)
+	klog.Infof("detected chip name=%s, classified devType=%s, dcmiMemoryMiB=%d", chipInfo.Name, devType, memoryMB)
+	idx := indexVNPUConfig(config.VNPUs.Configs, chipInfo.Name, devType, memoryMB)
 	if idx == -1 {
-		return fmt.Errorf("can not find vnpu config for chip %s (devType=%s)", chipInfo.Name, devType)
+		return fmt.Errorf("can not find vnpu config for chip %s (devType=%s, dcmiMemoryMiB=%d)", chipInfo.Name, devType, memoryMB)
 	}
 	am.config = config.VNPUs.Configs[idx]
 	am.globalConfig = *config
@@ -142,32 +147,123 @@ func (am *AscendManager) LoadConfig(path string) error {
 	return nil
 }
 
+func probeDeviceMemoryMB(mgr devmanager.DeviceInterface) uint64 {
+	if mgr == nil {
+		return 0
+	}
+	_, ids, err := mgr.GetDeviceList()
+	if err != nil || len(ids) == 0 {
+		klog.V(4).Infof("probe DCMI memory: no device list: %v", err)
+		return 0
+	}
+	for _, id := range ids {
+		info, err := mgr.GetDeviceMemoryInfo(id)
+		if err != nil || info == nil || info.MemorySize == 0 {
+			continue
+		}
+		return info.MemorySize
+	}
+	return 0
+}
+
+func hasMemoryBand(vnpu internal.VNPUConfig) bool {
+	return vnpu.MemoryMatchMin > 0 || vnpu.MemoryMatchMax > 0
+}
+
+// configMatchesMemory reports whether memoryMB is in [min, max). A zero bound
+// is unbounded. Unconstrained entries match any reading, including 0.
+func configMatchesMemory(vnpu internal.VNPUConfig, memoryMB uint64) bool {
+	if !hasMemoryBand(vnpu) {
+		return true
+	}
+	if memoryMB == 0 {
+		return false
+	}
+	if vnpu.MemoryMatchMin > 0 && memoryMB < uint64(vnpu.MemoryMatchMin) {
+		return false
+	}
+	if vnpu.MemoryMatchMax > 0 && memoryMB >= uint64(vnpu.MemoryMatchMax) {
+		return false
+	}
+	return true
+}
+
+func pickFromCandidates(configs []internal.VNPUConfig, idxs []int, memoryMB uint64) int {
+	if len(idxs) == 0 {
+		return -1
+	}
+	if len(idxs) == 1 {
+		return idxs[0]
+	}
+	var unconstrained []int
+	for _, i := range idxs {
+		if hasMemoryBand(configs[i]) {
+			if configMatchesMemory(configs[i], memoryMB) {
+				return i
+			}
+			continue
+		}
+		unconstrained = append(unconstrained, i)
+	}
+	if len(unconstrained) > 0 {
+		return unconstrained[0]
+	}
+	return idxs[0]
+}
+
 // indexVNPUConfig prefers an exact chipName hit, then DevType+chipName, then
 // DevType alone. DCMI reports 910A as "910B" (no suffix); config entries can
 // therefore set chipName: "910B" and/or devType: Ascend910.
-func indexVNPUConfig(configs []internal.VNPUConfig, chipName, devType string) int {
+//
+// Multiple entries may share chipName (310P 24G vs 48G). When more than one
+// matches, memoryMB (DCMI MiB) selects the entry whose [memoryMatchMin,
+// memoryMatchMax) contains it. A failed DCMI read (0) prefers an unconstrained
+// entry, then the first chipName hit.
+func indexVNPUConfig(configs []internal.VNPUConfig, chipName, devType string, memoryMB uint64) int {
+	var exact []int
 	for i, vnpu := range configs {
 		if vnpu.ChipName == chipName {
-			return i
+			exact = append(exact, i)
 		}
 	}
+	if idx := pickFromCandidates(configs, exact, memoryMB); idx != -1 {
+		return idx
+	}
+	var typed []int
 	for i, vnpu := range configs {
 		if vnpu.DevType != "" && vnpu.DevType == devType {
 			if vnpu.ChipName == "" || vnpu.ChipName == chipName {
-				return i
+				typed = append(typed, i)
 			}
 		}
 	}
+	if idx := pickFromCandidates(configs, typed, memoryMB); idx != -1 {
+		return idx
+	}
+	var byType []int
 	for i, vnpu := range configs {
 		if vnpu.DevType != "" && vnpu.DevType == devType {
-			return i
+			byType = append(byType, i)
 		}
 	}
-	return -1
+	return pickFromCandidates(configs, byType, memoryMB)
 }
 
 func (am *AscendManager) CommonWord() string {
 	return am.config.CommonWord
+}
+
+func (am *AscendManager) StaleRegisterCommonWords() []string {
+	var out []string
+	for _, c := range am.globalConfig.VNPUs.Configs {
+		if c.CommonWord == "" || c.CommonWord == am.config.CommonWord {
+			continue
+		}
+		if c.ChipName != "" && c.ChipName == am.config.ChipName {
+			out = append(out, c.CommonWord)
+		}
+	}
+	return out
 }
 
 func (am *AscendManager) ResourceName() string {

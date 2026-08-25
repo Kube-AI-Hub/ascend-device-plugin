@@ -65,7 +65,7 @@ make docker-buildx \
     TARGET_ARCH="${TARGET_ARCH}" \
     PLATFORMS="${PLATFORMS}" \
     DOCKER_BUILDX_OUTPUT="${DOCKER_BUILDX_OUTPUT}" \
-    GOLANG_IMAGE="${GOLANG_IMAGE:-watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/golang:1.25.5-bookworm}" \
+    GOLANG_IMAGE="${GOLANG_IMAGE:-watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/golang:1.26.2-bookworm}" \
     BASE_IMAGE="${BASE_IMAGE:-watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ubuntu:22.04}" \
     GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 

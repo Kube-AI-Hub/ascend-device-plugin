@@ -104,11 +104,24 @@ func TestVDeviceCount(t *testing.T) {
 // without a real NPU.
 type chipInfoDeviceManager struct {
 	*devmanager.DeviceManagerMock
-	chipName string
+	chipName   string
+	memorySize uint64
+	memoryErr  error
 }
 
 func (d *chipInfoDeviceManager) GetValidChipInfo() (common.ChipInfo, error) {
 	return common.ChipInfo{Type: "Ascend", Name: d.chipName}, nil
+}
+
+func (d *chipInfoDeviceManager) GetDeviceList() (int32, []int32, error) {
+	return 1, []int32{0}, nil
+}
+
+func (d *chipInfoDeviceManager) GetDeviceMemoryInfo(logicID int32) (*common.MemoryInfo, error) {
+	if d.memoryErr != nil {
+		return nil, d.memoryErr
+	}
+	return &common.MemoryInfo{MemorySize: d.memorySize}, nil
 }
 
 func writeConfig(t *testing.T, content string) string {
@@ -212,5 +225,69 @@ func TestLoadConfigChipNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "310P3") {
 		t.Errorf("LoadConfig() error = %v, want it to name the missing chip", err)
+	}
+}
+
+const dual310PConfig = `vnpus:
+  configs:
+  - chipName: 310P3
+    devType: Ascend310P
+    commonWord: Ascend310P
+    resourceName: huawei.com/Ascend310P
+    memoryAllocatable: 21527
+    memoryCapacity: 24576
+    memoryMatchMax: 32768
+    templates:
+    - {name: vir01, memory: 3072}
+  - chipName: 310P3
+    devType: Ascend310P
+    commonWord: Ascend310P48
+    resourceName: huawei.com/Ascend310P48
+    memoryAllocatable: 43054
+    memoryCapacity: 44278
+    memoryMatchMin: 32768
+    templates:
+    - {name: vir01, memory: 6144}
+`
+
+func TestIndexVNPUConfigMemorySKU(t *testing.T) {
+	am := &AscendManager{mgr: &chipInfoDeviceManager{chipName: "310P3", memorySize: 44278}}
+	if err := am.LoadConfig(writeConfig(t, dual310PConfig)); err != nil {
+		t.Fatalf("LoadConfig 48G: %v", err)
+	}
+	if got := am.CommonWord(); got != "Ascend310P48" {
+		t.Fatalf("48G CommonWord() = %q, want Ascend310P48", got)
+	}
+	if got := am.ResourceName(); got != "huawei.com/Ascend310P48" {
+		t.Fatalf("48G ResourceName() = %q", got)
+	}
+	if stale := am.StaleRegisterCommonWords(); len(stale) != 1 || stale[0] != "Ascend310P" {
+		t.Fatalf("48G StaleRegisterCommonWords() = %v, want [Ascend310P]", stale)
+	}
+
+	am24 := &AscendManager{mgr: &chipInfoDeviceManager{chipName: "310P3", memorySize: 22100}}
+	if err := am24.LoadConfig(writeConfig(t, dual310PConfig)); err != nil {
+		t.Fatalf("LoadConfig 24G: %v", err)
+	}
+	if got := am24.CommonWord(); got != "Ascend310P" {
+		t.Fatalf("24G CommonWord() = %q, want Ascend310P", got)
+	}
+
+	amFail := &AscendManager{mgr: &chipInfoDeviceManager{chipName: "310P3", memoryErr: os.ErrNotExist}}
+	if err := amFail.LoadConfig(writeConfig(t, dual310PConfig)); err != nil {
+		t.Fatalf("LoadConfig DCMI fail: %v", err)
+	}
+	if got := amFail.CommonWord(); got != "Ascend310P" {
+		t.Fatalf("DCMI fail CommonWord() = %q, want first/24G entry Ascend310P", got)
+	}
+}
+
+func TestIndexVNPUConfigSingleHitIgnoresMemory(t *testing.T) {
+	configs := []internal.VNPUConfig{
+		{ChipName: "910B3", CommonWord: "Ascend910B3"},
+		{ChipName: "310P3", CommonWord: "Ascend310P", MemoryMatchMax: 32768},
+	}
+	if got := indexVNPUConfig(configs, "910B3", "Ascend910B", 44278); got != 0 {
+		t.Fatalf("910B3 idx = %d, want 0", got)
 	}
 }

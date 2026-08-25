@@ -1,17 +1,10 @@
-ARG BASE_IMAGE=ubuntu:20.04
-FROM $BASE_IMAGE AS build
+ARG GOLANG_IMAGE=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/golang:1.26.2-bookworm
+ARG BASE_IMAGE=watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ubuntu:22.04
+FROM $GOLANG_IMAGE AS build
 
-ARG GO_VERSION=1.24.6
-ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update -y && apt install -y gcc make wget ca-certificates
-# Install the official Go toolchain (matches go.mod). Avoids the fragile
-# longsleep/golang-backports PPA, which depends on Launchpad API availability
-# and flakes in CI (especially on the emulated arm64 leg).
-RUN wget -qO /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" \
-    && tar -C /usr/local -xzf /tmp/go.tgz \
-    && rm /tmp/go.tgz
-ENV PATH=/usr/local/go/bin:/root/go/bin:$PATH
+RUN apt-get update -y && apt-get install -y --no-install-recommends gcc make ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 ARG GOPROXY
 ENV GOPATH=/go
 ARG VERSION

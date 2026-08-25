@@ -5,6 +5,8 @@ IMG_NAME = projecthami/ascend-device-plugin
 REGISTRY ?= watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub
 IMG_TAG ?= $(REGISTRY)/$(IMG_NAME):$(VERSION)
 GOPROXY ?= https://goproxy.cn,direct
+GOLANG_IMAGE ?= watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/golang:1.26.2-bookworm
+BASE_IMAGE ?= watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub/ubuntu:22.04
 PLATFORMS ?= linux/amd64,linux/arm64
 DOCKER_BUILDX_OUTPUT ?= --push
 BUILD_CACHE_DIR ?= $(HOME)/.cache/buildx/ascend-device-plugin
@@ -31,6 +33,8 @@ docker-buildx:
 	$(BUILD_CACHE) \
 	--build-arg GOPROXY=$(GOPROXY) \
 	--build-arg VERSION=$(VERSION) \
+	--build-arg BASE_IMAGE=$(BASE_IMAGE) \
+	--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 	-f Dockerfile \
 	-t $(IMG_TAG) \
 	$(DOCKER_BUILDX_OUTPUT) \

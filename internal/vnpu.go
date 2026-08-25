@@ -33,16 +33,21 @@ type Template struct {
 }
 
 type VNPUConfig struct {
-	CommonWord         string     `json:"commonWord"`
-	ChipName           string     `json:"chipName"`
-	DevType            string     `json:"devType,omitempty"`
-	ResourceName       string     `json:"resourceName"`
-	ResourceMemoryName string     `json:"resourceMemoryName"`
-	MemoryAllocatable  int64      `json:"memoryAllocatable"`
-	MemoryCapacity     int64      `json:"memoryCapacity"`
-	AICore             int32      `json:"aiCore"`
-	AICPU              int32      `json:"aiCPU"`
-	Templates          []Template `json:"templates"`
+	CommonWord         string `json:"commonWord"`
+	ChipName           string `json:"chipName"`
+	DevType            string `json:"devType,omitempty"`
+	ResourceName       string `json:"resourceName"`
+	ResourceMemoryName string `json:"resourceMemoryName"`
+	MemoryAllocatable  int64  `json:"memoryAllocatable"`
+	MemoryCapacity     int64  `json:"memoryCapacity"`
+	// MemoryMatchMin/Max select among multiple entries that share ChipName.
+	// The interval is [min, max): 0 means unbounded on that side. Units are
+	// DCMI MemorySize (MiB on 310P).
+	MemoryMatchMin int64      `json:"memoryMatchMin,omitempty"`
+	MemoryMatchMax int64      `json:"memoryMatchMax,omitempty"`
+	AICore         int32      `json:"aiCore"`
+	AICPU          int32      `json:"aiCPU"`
+	Templates      []Template `json:"templates"`
 }
 
 type VNPUsConfig struct {

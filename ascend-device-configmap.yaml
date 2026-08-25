@@ -12,7 +12,7 @@ data:
     vnpus:
       hamiVnpuCore: false
       configs:
-      # Ascend 910A series (32G). DCMI chip name is "910B" (without digit suffix).
+      # Ascend 910A series (32G). DCMI chip name is "910B" (no suffix) or "910ProB".
       # Official upstream uses chipName: 910A, which will not match this DCMI report.
       - chipName: "910B"
         devType: Ascend910
@@ -126,6 +126,7 @@ data:
         resourceCoreName: huawei.com/Ascend310P-core
         memoryAllocatable: 21527
         memoryCapacity: 24576
+        memoryMatchMax: 32768
         aiCore: 8
         aiCPU: 7
         templates:
@@ -139,6 +140,30 @@ data:
             aiCPU: 2
           - name: vir04
             memory: 12288
+            aiCore: 4
+            aiCPU: 4
+      - chipName: 310P3
+        devType: Ascend310P
+        commonWord: Ascend310P48
+        resourceName: huawei.com/Ascend310P48
+        resourceMemoryName: huawei.com/Ascend310P48-memory
+        resourceCoreName: huawei.com/Ascend310P48-core
+        memoryAllocatable: 43054
+        memoryCapacity: 44278
+        memoryMatchMin: 32768
+        aiCore: 8
+        aiCPU: 7
+        templates:
+          - name: vir01
+            memory: 6144
+            aiCore: 1
+            aiCPU: 1
+          - name: vir02
+            memory: 12288
+            aiCore: 2
+            aiCPU: 2
+          - name: vir04
+            memory: 24576
             aiCore: 4
             aiCPU: 4
       - chipName: Ascend910

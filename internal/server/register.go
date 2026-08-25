@@ -28,11 +28,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
 	"github.com/Project-HAMi/HAMi/pkg/device"
 	"github.com/Project-HAMi/HAMi/pkg/util"
+	"github.com/Project-HAMi/HAMi/pkg/util/client"
 )
 
 // healthUpdateSendTimeout bounds how long watchAndRegister waits for a
@@ -154,12 +158,63 @@ func (ps *PluginServer) registerHAMi() error {
 	if err != nil {
 		return fmt.Errorf("get node %s error: %w", ps.nodeName, err)
 	}
+	currentWord := ps.mgr.CommonWord()
+	for k, v := range staleRegisterAnnotations(node, currentWord, ps.mgr.StaleRegisterCommonWords()) {
+		annos[k] = v
+	}
 	err = util.PatchNodeAnnotations(node, annos)
 	if err != nil {
 		return fmt.Errorf("patch node %s annotations error: %w", ps.nodeName, err)
 	}
+	if err := patchAscendCommonWordLabel(ps.nodeName, currentWord); err != nil {
+		klog.Warningf("patch %s label hami.io/ascend-common-word: %v", ps.nodeName, err)
+	}
 	klog.V(5).Infof("patch node %s annotations: %v", ps.nodeName, annos)
 	return nil
+}
+
+func staleRegisterAnnotations(node *v1.Node, currentWord string, staleWords []string) map[string]string {
+	clears := make(map[string]string)
+	if node == nil {
+		return clears
+	}
+	for _, word := range staleWords {
+		if word == "" || word == currentWord {
+			continue
+		}
+		reg := fmt.Sprintf("hami.io/node-register-%s", word)
+		hs := fmt.Sprintf("hami.io/node-handshake-%s", word)
+		if _, ok := node.Annotations[reg]; ok {
+			// Empty device list so HAMi GetNodeDevices fails closed for the old SKU.
+			clears[reg] = "[]"
+		}
+		if _, ok := node.Annotations[hs]; ok {
+			clears[hs] = ""
+		}
+	}
+	return clears
+}
+
+func patchAscendCommonWordLabel(nodeName, commonWord string) error {
+	if nodeName == "" || commonWord == "" {
+		return nil
+	}
+	c := client.GetClient()
+	if c == nil {
+		return fmt.Errorf("kubernetes client is not initialized")
+	}
+	payload, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]string{
+				"hami.io/ascend-common-word": commonWord,
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = c.CoreV1().Nodes().Patch(context.Background(), nodeName, k8stypes.MergePatchType, payload, metav1.PatchOptions{})
+	return err
 }
 
 func (ps *PluginServer) getDeviceNetworkID(idx int, deviceType string) (int, error) {

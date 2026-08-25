@@ -478,6 +478,59 @@ func TestRegisterHAMi(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "ClearsStale310PRegister",
+			args: registerHAMiArgs{
+				nodeName:      "test-node",
+				registerAnno:  "hami.io/node-register-Ascend310P48",
+				handshakeAnno: "hami.io/node-handshake-Ascend310P48",
+				mgr: &FakeManager{
+					GetDevicesFunc: func() []*manager.Device {
+						return []*manager.Device{{UUID: "uuid48", Memory: 43054, AICore: 8, Health: true}}
+					},
+					VDeviceCountFunc: func() int { return 14 },
+					CommonWordFunc:   func() string { return "Ascend310P48" },
+					StaleRegisterCommonWordsFunc: func() []string {
+						return []string{"Ascend310P"}
+					},
+				},
+				nodes: []*v1.Node{
+					{ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node",
+						Annotations: map[string]string{
+							"hami.io/node-register-Ascend310P":  `[{"id":"old","count":7,"devmem":21527}]`,
+							"hami.io/node-handshake-Ascend310P": "Reported_old",
+							"hami.io/node-register-Ascend910A":  `[{"id":"keep"}]`,
+						},
+					}},
+				},
+			},
+			want: registerHAMiWant{
+				deviceCount: 1,
+				annotationCheck: func(t *testing.T, annos map[string]string) {
+					t.Helper()
+					if got := annos["hami.io/node-register-Ascend310P"]; got != "[]" {
+						t.Fatalf("stale 310P register = %q, want []", got)
+					}
+					if got := annos["hami.io/node-handshake-Ascend310P"]; got != "" {
+						t.Fatalf("stale 310P handshake = %q, want empty", got)
+					}
+					if got := annos["hami.io/node-register-Ascend910A"]; got != `[{"id":"keep"}]` {
+						t.Fatalf("unrelated register was changed: %q", got)
+					}
+					if annos["hami.io/node-register-Ascend310P48"] == "" {
+						t.Fatal("missing new 310P48 register annotation")
+					}
+					n, err := client.KubeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
+					if err != nil {
+						t.Fatalf("get node for label check: %v", err)
+					}
+					if got := n.Labels["hami.io/ascend-common-word"]; got != "Ascend310P48" {
+						t.Fatalf("label hami.io/ascend-common-word = %q, want Ascend310P48", got)
+					}
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
