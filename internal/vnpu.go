@@ -35,6 +35,7 @@ type Template struct {
 type VNPUConfig struct {
 	CommonWord         string     `json:"commonWord"`
 	ChipName           string     `json:"chipName"`
+	DevType            string     `json:"devType,omitempty"`
 	ResourceName       string     `json:"resourceName"`
 	ResourceMemoryName string     `json:"resourceMemoryName"`
 	MemoryAllocatable  int64      `json:"memoryAllocatable"`

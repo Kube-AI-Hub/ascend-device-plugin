@@ -743,10 +743,10 @@ func TestBuildContainerAllocateResponse(t *testing.T) {
 				}
 			}
 
-			// Non-hami-core mode: Mounts and Devices should be nil
+			// Non-hami-core mode: only an optional npu-smi bind-mount is allowed.
 			if tc.want.mounts == nil && tc.args.pod.Annotations[VNPUModeAnnotation] != VNPUModeHamiCore {
-				if resp.Mounts != nil {
-					t.Fatal("resp.Mounts should be nil in non-hami-core mode")
+				if err := assertOptionalNpuSmiMount(resp.Mounts); err != nil {
+					t.Fatal(err)
 				}
 				if resp.Devices != nil {
 					t.Fatal("resp.Devices should be nil")
@@ -754,6 +754,19 @@ func TestBuildContainerAllocateResponse(t *testing.T) {
 			}
 		})
 	}
+}
+
+func assertOptionalNpuSmiMount(mounts []*v1beta1.Mount) error {
+	if mounts == nil {
+		return nil
+	}
+	if len(mounts) != 1 {
+		return fmt.Errorf("non-hami-core mode allows at most one npu-smi mount, got %d", len(mounts))
+	}
+	if mounts[0].ContainerPath != "/usr/local/bin/npu-smi" {
+		return fmt.Errorf("unexpected non-hami-core mount: %+v", mounts[0])
+	}
+	return nil
 }
 
 // ============================================================================

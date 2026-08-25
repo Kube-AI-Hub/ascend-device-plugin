@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"ascend-common/devmanager"
+	"ascend-common/devmanager/common"
 	"ascend-common/devmanager/dcmi"
 
 	"github.com/Project-HAMi/ascend-device-plugin/internal"
@@ -126,15 +127,11 @@ func (am *AscendManager) LoadConfig(path string) error {
 	if chipInfo.Type != "Ascend" {
 		return fmt.Errorf("chip type is not Ascend")
 	}
-	idx := -1
-	for i, vnpu := range config.VNPUs.Configs {
-		if vnpu.ChipName == chipInfo.Name {
-			idx = i
-			break
-		}
-	}
+	devType := common.GetDeviceTypeByChipName(chipInfo.Name)
+	klog.Infof("detected chip name=%s, classified devType=%s", chipInfo.Name, devType)
+	idx := indexVNPUConfig(config.VNPUs.Configs, chipInfo.Name, devType)
 	if idx == -1 {
-		return fmt.Errorf("can not find vnpu config for chip %s", chipInfo.Name)
+		return fmt.Errorf("can not find vnpu config for chip %s (devType=%s)", chipInfo.Name, devType)
 	}
 	am.config = config.VNPUs.Configs[idx]
 	am.globalConfig = *config
@@ -143,6 +140,30 @@ func (am *AscendManager) LoadConfig(path string) error {
 	})
 	klog.Infof("load config: %v", am.config)
 	return nil
+}
+
+// indexVNPUConfig prefers an exact chipName hit, then DevType+chipName, then
+// DevType alone. DCMI reports 910A as "910B" (no suffix); config entries can
+// therefore set chipName: "910B" and/or devType: Ascend910.
+func indexVNPUConfig(configs []internal.VNPUConfig, chipName, devType string) int {
+	for i, vnpu := range configs {
+		if vnpu.ChipName == chipName {
+			return i
+		}
+	}
+	for i, vnpu := range configs {
+		if vnpu.DevType != "" && vnpu.DevType == devType {
+			if vnpu.ChipName == "" || vnpu.ChipName == chipName {
+				return i
+			}
+		}
+	}
+	for i, vnpu := range configs {
+		if vnpu.DevType != "" && vnpu.DevType == devType {
+			return i
+		}
+	}
+	return -1
 }
 
 func (am *AscendManager) CommonWord() string {

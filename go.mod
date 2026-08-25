@@ -36,10 +36,10 @@ require (
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
-	github.com/influxdata/telegraf v1.26.3 // indirect
+	github.com/influxdata/telegraf v1.34.4 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/moby/sys/capability v0.4.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
@@ -82,6 +82,16 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 	tags.cncf.io/container-device-interface v1.1.0 // indirect
 	tags.cncf.io/container-device-interface/specs-go v1.1.0 // indirect
+)
+
+// mind-cluster checkout contains sibling components without their own go.mod;
+// keep them out of this module so tidy/build do not walk volcano/operator trees.
+ignore (
+	./libvnpu
+	./mind-cluster/component/ascend-faultdiag
+	./mind-cluster/component/ascend-for-volcano
+	./mind-cluster/component/mindio
+	./mind-cluster/component/taskd
 )
 
 replace (

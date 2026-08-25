@@ -138,8 +138,40 @@ func (ps *PluginServer) buildContainerAllocateResponse(pod *v1.Pod, ctrName stri
 		if ascendVNPUSpec != "" {
 			resp.Envs["ASCEND_VNPU_SPECS"] = ascendVNPUSpec
 		}
+		// Hard-template path: mount npu-smi into the workload. Official only
+		// injects the SMI toolchain for hami-vnpu-core; many nodes keep
+		// npu-smi under /usr/local/sbin (mounted into this plugin at the
+		// same path) rather than /usr/local/bin.
+		mountNpuSmi(resp)
 	}
 	return resp, nil
+}
+
+// npuSmiMountCandidate maps a path visible inside the device-plugin
+// container (checkPath) to the host path kubelet should bind-mount.
+type npuSmiMountCandidate struct {
+	checkPath string
+	hostPath  string
+}
+
+var npuSmiMountCandidates = []npuSmiMountCandidate{
+	{"/usr/local/Ascend/driver/tools/npu-smi", "/usr/local/Ascend/driver/tools/npu-smi"},
+	{"/usr/local/sbin/npu-smi", "/usr/local/sbin/npu-smi"},
+	{"/usr/local/bin/npu-smi", "/usr/local/bin/npu-smi"},
+}
+
+func mountNpuSmi(resp *v1beta1.ContainerAllocateResponse) {
+	for _, c := range npuSmiMountCandidates {
+		if _, err := os.Stat(c.checkPath); err != nil {
+			continue
+		}
+		resp.Mounts = append(resp.Mounts, &v1beta1.Mount{
+			HostPath:      c.hostPath,
+			ContainerPath: "/usr/local/bin/npu-smi",
+			ReadOnly:      true,
+		})
+		return
+	}
 }
 
 // popNextContainerDevices finds and erases the first non-empty containerDevices

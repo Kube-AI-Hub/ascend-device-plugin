@@ -2,6 +2,13 @@ GO ?= go
 VERSION ?= unknown
 BUILDARGS ?= -ldflags '-s -w -X github.com/Project-HAMi/ascend-device-plugin/version.version=$(VERSION)'
 IMG_NAME = projecthami/ascend-device-plugin
+REGISTRY ?= watering-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai-hub
+IMG_TAG ?= $(REGISTRY)/$(IMG_NAME):$(VERSION)
+GOPROXY ?= https://goproxy.cn,direct
+PLATFORMS ?= linux/amd64,linux/arm64
+DOCKER_BUILDX_OUTPUT ?= --push
+BUILD_CACHE_DIR ?= $(HOME)/.cache/buildx/ascend-device-plugin
+BUILD_CACHE ?= --cache-to type=local,dest=$(BUILD_CACHE_DIR),mode=max,compression=zstd,compression-level=3 --cache-from type=local,src=$(BUILD_CACHE_DIR)
 
 all: ascend-device-plugin
 
@@ -14,8 +21,24 @@ test:
 docker:
 	docker build \
 	--build-arg BASE_IMAGE=ubuntu:20.04 \
-	--build-arg GOPROXY=https://goproxy.cn,direct \
+	--build-arg GOPROXY=$(GOPROXY) \
 	-t ${IMG_NAME}:${VERSION} .
+
+docker-buildx:
+	@mkdir -p $(BUILD_CACHE_DIR)
+	docker buildx build \
+	--platform $(PLATFORMS) \
+	$(BUILD_CACHE) \
+	--build-arg GOPROXY=$(GOPROXY) \
+	--build-arg VERSION=$(VERSION) \
+	-f Dockerfile \
+	-t $(IMG_TAG) \
+	$(DOCKER_BUILDX_OUTPUT) \
+	.
+
+container-cache-prune:
+	@echo "Removing local buildx cache at $(BUILD_CACHE_DIR)..."
+	rm -rf $(BUILD_CACHE_DIR)
 
 lint:
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.0
@@ -67,4 +90,4 @@ verify-helm-release-path:
 clean:
 	rm -rf ./ascend-device-plugin
 
-.PHONY: all tidy test lint clean update-chart-docs verify-helm-chart verify-helm-release-path
+.PHONY: all tidy test lint clean docker-buildx container-cache-prune update-chart-docs verify-helm-chart verify-helm-release-path

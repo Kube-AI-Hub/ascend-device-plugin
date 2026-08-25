@@ -12,10 +12,14 @@ data:
     vnpus:
       hamiVnpuCore: false
       configs:
-      - chipName: 910A
+      # Ascend 910A series (32G). DCMI chip name is "910B" (without digit suffix).
+      # Official upstream uses chipName: 910A, which will not match this DCMI report.
+      - chipName: "910B"
+        devType: Ascend910
         commonWord: Ascend910A
         resourceName: huawei.com/Ascend910A
         resourceMemoryName: huawei.com/Ascend910A-memory
+        resourceCoreName: huawei.com/Ascend910A-core
         memoryAllocatable: 32768
         memoryCapacity: 32768
         aiCore: 30
@@ -33,9 +37,11 @@ data:
             memory: 17476
             aiCore: 16
       - chipName: 910B2
+        devType: Ascend910B
         commonWord: Ascend910B2
         resourceName: huawei.com/Ascend910B2
         resourceMemoryName: huawei.com/Ascend910B2-memory
+        resourceCoreName: huawei.com/Ascend910B2-core
         memoryAllocatable: 65536
         memoryCapacity: 65536
         aiCore: 24
@@ -54,6 +60,7 @@ data:
             aiCore: 12
             aiCPU: 3
       - chipName: 910B3
+        devType: Ascend910B
         commonWord: Ascend910B3
         resourceName: huawei.com/Ascend910B3
         resourceMemoryName: huawei.com/Ascend910B3-memory
@@ -71,27 +78,33 @@ data:
             memory: 32768
             aiCore: 10
             aiCPU: 3
+      # 910B4-1 is a 64G variant. Template names are fixed by the Ascend
+      # runtime and must not be changed; memory is the real scheduling size.
       - chipName: 910B4-1
+        devType: Ascend910B
         commonWord: Ascend910B4-1
         resourceName: huawei.com/Ascend910B4-1
         resourceMemoryName: huawei.com/Ascend910B4-1-memory
+        resourceCoreName: huawei.com/Ascend910B4-1-core
         memoryAllocatable: 65536
         memoryCapacity: 65536
         aiCore: 20
         aiCPU: 7
         templates:
-          - name: vir05_1c_16g
+          - name: vir05_1c_8g
             memory: 16384
             aiCore: 5
             aiCPU: 1
-          - name: vir10_3c_32g
+          - name: vir10_3c_16g
             memory: 32768
             aiCore: 10
             aiCPU: 3
       - chipName: 910B4
+        devType: Ascend910B
         commonWord: Ascend910B4
         resourceName: huawei.com/Ascend910B4
         resourceMemoryName: huawei.com/Ascend910B4-memory
+        resourceCoreName: huawei.com/Ascend910B4-core
         memoryAllocatable: 32768
         memoryCapacity: 32768
         aiCore: 20
@@ -106,9 +119,11 @@ data:
             aiCore: 10
             aiCPU: 3
       - chipName: 310P3
+        devType: Ascend310P
         commonWord: Ascend310P
         resourceName: huawei.com/Ascend310P
         resourceMemoryName: huawei.com/Ascend310P-memory
+        resourceCoreName: huawei.com/Ascend310P-core
         memoryAllocatable: 21527
         memoryCapacity: 24576
         aiCore: 8

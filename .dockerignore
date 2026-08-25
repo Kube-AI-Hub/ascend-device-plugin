@@ -1,0 +1,26 @@
+# VCS / IDE / OS metadata
+.git
+.github
+.gitignore
+.idea
+.vscode
+.DS_Store
+
+# Local build artifact (rebuilt locally, would invalidate COPY . .)
+ascend-device-plugin
+bin/
+*.exe
+*.exe~
+*.dll
+*.dylib
+*.test
+*.out
+coverage/
+coverage.txt
+
+# Examples / yaml manifests / docs - not used by the binary build
+examples/
+README*.md
+OWNERS
+
+# NOTE: do NOT exclude mind-cluster/, libvnpu/, or lib/ - the image build depends on them

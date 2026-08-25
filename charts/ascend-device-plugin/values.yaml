@@ -83,10 +83,12 @@ deviceConfig: |- # @schema required:true
   vnpus:
     hamiVnpuCore: {{ .Values.hamiVnpuCore.enabled }}
     configs:
-    - chipName: 910A
+    - chipName: "910B"
+      devType: Ascend910
       commonWord: Ascend910A
       resourceName: huawei.com/Ascend910A
       resourceMemoryName: huawei.com/Ascend910A-memory
+      resourceCoreName: huawei.com/Ascend910A-core
       memoryAllocatable: 32768
       memoryCapacity: 32768
       aiCore: 30
@@ -104,9 +106,11 @@ deviceConfig: |- # @schema required:true
           memory: 17476
           aiCore: 16
     - chipName: 910B2
+      devType: Ascend910B
       commonWord: Ascend910B2
       resourceName: huawei.com/Ascend910B2
       resourceMemoryName: huawei.com/Ascend910B2-memory
+      resourceCoreName: huawei.com/Ascend910B2-core
       memoryAllocatable: 65536
       memoryCapacity: 65536
       aiCore: 24
@@ -125,6 +129,7 @@ deviceConfig: |- # @schema required:true
           aiCore: 12
           aiCPU: 3
     - chipName: 910B3
+      devType: Ascend910B
       commonWord: Ascend910B3
       resourceName: huawei.com/Ascend910B3
       resourceMemoryName: huawei.com/Ascend910B3-memory
@@ -143,26 +148,30 @@ deviceConfig: |- # @schema required:true
           aiCore: 10
           aiCPU: 3
     - chipName: 910B4-1
+      devType: Ascend910B
       commonWord: Ascend910B4-1
       resourceName: huawei.com/Ascend910B4-1
       resourceMemoryName: huawei.com/Ascend910B4-1-memory
+      resourceCoreName: huawei.com/Ascend910B4-1-core
       memoryAllocatable: 65536
       memoryCapacity: 65536
       aiCore: 20
       aiCPU: 7
       templates:
-        - name: vir05_1c_16g
+        - name: vir05_1c_8g
           memory: 16384
           aiCore: 5
           aiCPU: 1
-        - name: vir10_3c_32g
+        - name: vir10_3c_16g
           memory: 32768
           aiCore: 10
           aiCPU: 3
     - chipName: 910B4
+      devType: Ascend910B
       commonWord: Ascend910B4
       resourceName: huawei.com/Ascend910B4
       resourceMemoryName: huawei.com/Ascend910B4-memory
+      resourceCoreName: huawei.com/Ascend910B4-core
       memoryAllocatable: 32768
       memoryCapacity: 32768
       aiCore: 20
@@ -177,9 +186,11 @@ deviceConfig: |- # @schema required:true
           aiCore: 10
           aiCPU: 3
     - chipName: 310P3
+      devType: Ascend310P
       commonWord: Ascend310P
       resourceName: huawei.com/Ascend310P
       resourceMemoryName: huawei.com/Ascend310P-memory
+      resourceCoreName: huawei.com/Ascend310P-core
       memoryAllocatable: 21527
       memoryCapacity: 24576
       aiCore: 8
@@ -206,6 +217,15 @@ deviceConfig: |- # @schema required:true
       memoryCapacity: 65536
       aiCore: 20
       aiCPU: 7
+      templates:
+        - name: vir05_1c_16g
+          memory: 16384
+          aiCore: 5
+          aiCPU: 1
+        - name: vir10_3c_32g
+          memory: 32768
+          aiCore: 10
+          aiCPU: 3
 
 # nodeConfig -- Per-node hami-vnpu-core configuration written to the node ConfigMap.
 nodeConfig: |- # @schema required:true
